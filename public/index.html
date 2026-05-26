@@ -438,32 +438,15 @@
         </div>
 
         <div class="field">
-          <label for="titleInput">教材標題</label>
-          <input id="titleInput" name="title" type="text" maxlength="80" placeholder="例如：二次函數圖像探索" required>
-        </div>
-
-        <div class="field">
-          <label for="topicInput">數學主題</label>
-          <select id="topicInput" name="topic" required>
-            <option value="代數">代數</option>
-            <option value="幾何">幾何</option>
-            <option value="函數">函數</option>
-            <option value="統計與概率">統計與概率</option>
-            <option value="微積分入門">微積分入門</option>
-            <option value="綜合練習">綜合練習</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label for="descriptionInput">簡介</label>
-          <textarea id="descriptionInput" name="description" maxlength="260" placeholder="簡短說明教材用途、適合年級或課堂活動方式。"></textarea>
+          <label for="pastedTextInput">直接貼上文字</label>
+          <textarea id="pastedTextInput" name="pastedText" maxlength="1800" placeholder="可以貼上例題、解題步驟、課堂活動說明、電子教材片段等。"></textarea>
         </div>
 
         <div class="field">
           <label for="fileInput">文檔或圖片</label>
           <div class="drop-zone">
-            <input id="fileInput" name="file" type="file" accept="image/*,.pdf,.txt,.md,.doc,.docx,.ppt,.pptx" required>
-            <p class="file-hint">支援圖片、PDF、文字檔、Word、PowerPoint。Firestore 示例模式單檔上限 650KB。</p>
+            <input id="fileInput" name="file" type="file" accept="image/*,.pdf,.txt,.md,.doc,.docx,.ppt,.pptx">
+            <p class="file-hint">可只貼文字，也可加上圖片、PDF、文字檔、Word、PowerPoint。Firestore 示例模式單檔上限 650KB。</p>
           </div>
         </div>
 
@@ -522,16 +505,15 @@
       const form = new FormData(uploadForm);
       const file = form.get("file");
       const author = cleanText(form.get("author"), 36);
-      const title = cleanText(form.get("title"), 80);
-      const topic = cleanText(form.get("topic"), 40);
-      const description = cleanText(form.get("description"), 260);
+      const pastedText = cleanText(form.get("pastedText"), 1800);
+      const hasFile = file && file.name;
 
-      if (!file || !file.name) {
-        setStatus("請選擇要上傳的文檔或圖片。", "error");
+      if (!pastedText && !hasFile) {
+        setStatus("請貼上文字，或選擇要上傳的文檔/圖片。", "error");
         return;
       }
 
-      if (file.size > maxSize) {
+      if (hasFile && file.size > maxSize) {
         setStatus("檔案超過 650KB，Firestore 示例模式請使用較小的文檔或圖片。", "error");
         return;
       }
@@ -541,17 +523,15 @@
       setStatus("正在上傳教材，完成後會自動出現在展示牆。", "");
 
       try {
-        const contentType = file.type || inferContentType(file.name);
-        const fileDataUrl = await readFileAsDataUrl(file);
-        const textPreview = await buildTextPreview(file);
+        const contentType = hasFile ? file.type || inferContentType(file.name) : "text/plain";
+        const fileDataUrl = hasFile ? await readFileAsDataUrl(file) : "";
+        const textPreview = hasFile ? await buildTextPreview(file) : "";
 
         await addDoc(collection(db, collectionName), {
           author,
-          title,
-          topic,
-          description,
-          fileName: file.name,
-          fileSize: file.size,
+          pastedText,
+          fileName: hasFile ? file.name : "",
+          fileSize: hasFile ? file.size : 0,
           contentType,
           fileDataUrl,
           textPreview,
@@ -596,21 +576,23 @@
 
     function renderMaterial(item) {
       const type = item.contentType || "";
-      const description = item.description ? `<p class="description">${escapeHtml(item.description)}</p>` : "";
+      const pastedText = item.pastedText || item.description || "";
+      const description = pastedText ? `<p class="description">${escapeHtml(pastedText)}</p>` : "";
       const created = formatDate(item.createdAt);
+      const title = item.title || item.fileName || (pastedText ? "文字教材" : "未命名教材");
+      const fileLink = item.fileDataUrl ? `<a class="open-link" href="${escapeAttribute(item.fileDataUrl)}" download="${escapeAttribute(item.fileName || "material")}" target="_blank" rel="noopener">下載原始檔案</a>` : "";
       return `
         <article class="material">
           ${renderPreview(item, type)}
           <div class="material-body">
-            <h3>${escapeHtml(item.title || item.fileName || "未命名教材")}</h3>
+            <h3>${escapeHtml(title)}</h3>
             <div class="meta">
               <span class="pill author">作者：${escapeHtml(item.author || "未標示")}</span>
-              <span class="pill">${escapeHtml(item.topic || "數學")}</span>
-              <span class="pill">${escapeHtml(fileLabel(type, item.fileName))}</span>
+              <span class="pill">${escapeHtml(item.fileName ? fileLabel(type, item.fileName) : "貼上文字")}</span>
               <span class="pill">${created}</span>
             </div>
             ${description}
-            <a class="open-link" href="${escapeAttribute(item.fileDataUrl)}" download="${escapeAttribute(item.fileName || "material")}" target="_blank" rel="noopener">下載原始檔案</a>
+            ${fileLink}
           </div>
         </article>
       `;
@@ -626,6 +608,9 @@
       }
       if (item.textPreview) {
         return `<div class="preview text"><pre class="text-preview">${escapeHtml(item.textPreview)}</pre></div>`;
+      }
+      if (item.pastedText) {
+        return `<div class="preview text"><pre class="text-preview">${escapeHtml(item.pastedText)}</pre></div>`;
       }
       const ext = extensionOf(item.fileName || type);
       return `<div class="preview"><div class="file-icon">${escapeHtml(ext || "DOC")}</div></div>`;

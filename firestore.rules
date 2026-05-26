@@ -81,9 +81,7 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.resource.data.keys().hasOnly([
           'author',
-          'title',
-          'topic',
-          'description',
+          'pastedText',
           'fileName',
           'fileSize',
           'contentType',
@@ -94,28 +92,24 @@ service cloud.firestore {
         && request.resource.data.author is string
         && request.resource.data.author.size() > 0
         && request.resource.data.author.size() <= 36
-        && request.resource.data.title is string
-        && request.resource.data.title.size() > 0
-        && request.resource.data.title.size() <= 80
-        && request.resource.data.topic is string
-        && request.resource.data.topic.size() > 0
-        && request.resource.data.topic.size() <= 40
-        && request.resource.data.description is string
-        && request.resource.data.description.size() <= 260
+        && request.resource.data.pastedText is string
+        && request.resource.data.pastedText.size() <= 1800
         && request.resource.data.fileName is string
-        && request.resource.data.fileName.size() > 0
         && request.resource.data.fileName.size() <= 180
         && request.resource.data.fileSize is int
-        && request.resource.data.fileSize > 0
+        && request.resource.data.fileSize >= 0
         && request.resource.data.fileSize < 650 * 1024
         && request.resource.data.contentType is string
         && request.resource.data.contentType.size() > 0
         && request.resource.data.contentType.size() <= 140
         && request.resource.data.fileDataUrl is string
-        && request.resource.data.fileDataUrl.size() > 0
         && request.resource.data.fileDataUrl.size() <= 900 * 1024
         && request.resource.data.textPreview is string
         && request.resource.data.textPreview.size() <= 900
+        && (
+          request.resource.data.pastedText.size() > 0
+          || request.resource.data.fileDataUrl.size() > 0
+        )
         && request.resource.data.createdAt is timestamp;
       allow update, delete: if false;
     }
