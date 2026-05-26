@@ -526,8 +526,10 @@
     import {
       getAuth,
       GoogleAuthProvider,
+      getRedirectResult,
       onAuthStateChanged,
       signInWithPopup,
+      signInWithRedirect,
       signOut
     } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
     const firebaseConfig = {
@@ -559,21 +561,35 @@
       try {
         if (auth.currentUser) {
           await signOut(auth);
+          setStatus("已登出管理員帳號。", "success");
           return;
         }
         await signInWithPopup(auth, provider);
       } catch (error) {
         console.error(error);
-        setStatus("管理員登入失敗，請確認 Firebase Authentication 已啟用 Google 登入。", "error");
+        if (error.code === "auth/popup-blocked" || error.code === "auth/cancelled-popup-request") {
+          setStatus("彈出視窗被瀏覽器阻擋，正在改用重新導向登入。", "");
+          await signInWithRedirect(auth, provider);
+          return;
+        }
+        setStatus(authErrorMessage(error), "error");
       }
+    });
+
+    getRedirectResult(auth).catch((error) => {
+      console.error(error);
+      setStatus(authErrorMessage(error), "error");
     });
 
     onAuthStateChanged(auth, (user) => {
       isAdmin = Boolean(user && user.email === adminEmail);
       adminButton.textContent = user
-        ? (isAdmin ? "管理員登出" : "非管理員帳號")
+        ? (isAdmin ? "管理員登出" : "登出非管理員帳號")
         : "管理員登入";
-      adminButton.disabled = Boolean(user && !isAdmin);
+      adminButton.disabled = false;
+      if (user && !isAdmin) {
+        setStatus(`目前登入的是 ${user.email || "未知帳號"}，不是管理員帳號 ${adminEmail}。`, "error");
+      }
       renderMaterials(currentItems);
     });
 
@@ -778,6 +794,19 @@
     function setStatus(text, type) {
       formStatus.textContent = text;
       formStatus.className = type ? `status ${type}` : "status";
+    }
+
+    function authErrorMessage(error) {
+      const code = error && error.code ? error.code : "unknown";
+      const hints = {
+        "auth/operation-not-allowed": "Google 登入 provider 尚未在 Firebase Authentication 啟用，或啟用後尚未生效。",
+        "auth/unauthorized-domain": "目前網域未加入 Firebase Authentication 的 Authorized domains。",
+        "auth/popup-closed-by-user": "登入視窗已被關閉，請再試一次。",
+        "auth/popup-blocked": "登入彈出視窗被瀏覽器阻擋。",
+        "auth/network-request-failed": "網路連線失敗，請稍後再試。"
+      };
+      const hint = hints[code] || "請把這個錯誤碼告訴我，我可以再精準修正。";
+      return `管理員登入失敗：${code}。${hint}`;
     }
 
     function escapeHtml(value) {
