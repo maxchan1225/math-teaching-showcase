@@ -111,7 +111,9 @@ service cloud.firestore {
           || request.resource.data.fileDataUrl.size() > 0
         )
         && request.resource.data.createdAt is timestamp;
-      allow update, delete: if false;
+      allow update: if false;
+      allow delete: if request.auth != null
+        && request.auth.token.email == 'qwer124@aol.com';
     }
 
     match /{document=**} {

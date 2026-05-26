@@ -115,6 +115,25 @@
       white-space: nowrap;
     }
 
+    .header-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: end;
+      gap: 10px;
+    }
+
+    .admin-button {
+      min-height: 36px;
+      padding: 8px 12px;
+      background: #eef2ff;
+      color: #3730a3;
+    }
+
+    .admin-button:hover {
+      background: #e0e7ff;
+    }
+
     .live-dot {
       width: 9px;
       height: 9px;
@@ -370,6 +389,28 @@
       border-bottom: 2px solid rgba(15, 118, 110, 0.35);
     }
 
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .remove-button {
+      min-height: auto;
+      padding: 0;
+      border-radius: 0;
+      background: transparent;
+      color: var(--danger);
+      font-weight: 900;
+      border-bottom: 2px solid rgba(180, 35, 24, 0.3);
+    }
+
+    .remove-button:hover {
+      background: transparent;
+      color: #8a1f17;
+    }
+
     .empty {
       min-height: 360px;
       border: 1px dashed #aab8cb;
@@ -421,9 +462,12 @@
         <p class="eyebrow">Firebase 即時教材展示</p>
         <h1>數學教學軟件及電子教材示例</h1>
       </div>
-      <div class="live-badge" aria-live="polite">
-        <span class="live-dot" aria-hidden="true"></span>
-        <span id="liveText">等待同步</span>
+      <div class="header-actions">
+        <div class="live-badge" aria-live="polite">
+          <span class="live-dot" aria-hidden="true"></span>
+          <span id="liveText">等待同步</span>
+        </div>
+        <button id="adminButton" class="admin-button" type="button">管理員登入</button>
       </div>
     </div>
   </header>
@@ -470,6 +514,8 @@
     import {
       addDoc,
       collection,
+      deleteDoc,
+      doc,
       getFirestore,
       limit,
       onSnapshot,
@@ -477,6 +523,13 @@
       query,
       serverTimestamp
     } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+    import {
+      getAuth,
+      GoogleAuthProvider,
+      onAuthStateChanged,
+      signInWithPopup,
+      signOut
+    } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
     const firebaseConfig = {
       projectId: "teacherstudy-ac70b",
       appId: "1:1028149564309:web:25f04802c852cc9bed5c9c",
@@ -488,6 +541,10 @@
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
+    const auth = getAuth(app);
+    const provider = new GoogleAuthProvider();
+    const adminEmail = "qwer124@aol.com";
+    let isAdmin = false;
 
     const uploadForm = document.getElementById("uploadForm");
     const uploadButton = document.getElementById("uploadButton");
@@ -496,9 +553,56 @@
     const materialsNode = document.getElementById("materials");
     const emptyState = document.getElementById("emptyState");
     const materialCounter = document.getElementById("materialCounter");
+    const adminButton = document.getElementById("adminButton");
+
+    adminButton.addEventListener("click", async () => {
+      try {
+        if (auth.currentUser) {
+          await signOut(auth);
+          return;
+        }
+        await signInWithPopup(auth, provider);
+      } catch (error) {
+        console.error(error);
+        setStatus("管理員登入失敗，請確認 Firebase Authentication 已啟用 Google 登入。", "error");
+      }
+    });
+
+    onAuthStateChanged(auth, (user) => {
+      isAdmin = Boolean(user && user.email === adminEmail);
+      adminButton.textContent = user
+        ? (isAdmin ? "管理員登出" : "非管理員帳號")
+        : "管理員登入";
+      adminButton.disabled = Boolean(user && !isAdmin);
+      renderMaterials(currentItems);
+    });
+
+    materialsNode.addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-remove-id]");
+      if (!button) return;
+      if (!isAdmin) {
+        setStatus("只有管理員可以移除檔案。", "error");
+        return;
+      }
+      const id = button.dataset.removeId;
+      const name = button.dataset.removeName || "這份內容";
+      if (!window.confirm(`確定要移除「${name}」嗎？`)) return;
+      button.disabled = true;
+      button.textContent = "移除中...";
+      try {
+        await deleteDoc(doc(db, collectionName, id));
+        setStatus("已移除。", "success");
+      } catch (error) {
+        console.error(error);
+        button.disabled = false;
+        button.textContent = "移除檔案";
+        setStatus("移除失敗，請確認 Firestore 規則已部署。", "error");
+      }
+    });
 
     const collectionName = "math_teaching_materials";
     const maxSize = 650 * 1024;
+    let currentItems = [];
 
     uploadForm.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -560,6 +664,7 @@
         id: doc.id,
         ...doc.data()
       }));
+      currentItems = items;
       renderMaterials(items);
       liveText.textContent = `已同步 ${items.length} 份`;
     }, (error) => {
@@ -581,6 +686,7 @@
       const created = formatDate(item.createdAt);
       const title = item.title || item.fileName || (pastedText ? "文字教材" : "未命名教材");
       const fileLink = item.fileDataUrl ? `<a class="open-link" href="${escapeAttribute(item.fileDataUrl)}" download="${escapeAttribute(item.fileName || "material")}" target="_blank" rel="noopener">下載原始檔案</a>` : "";
+      const removeButton = isAdmin ? `<button class="remove-button" type="button" data-remove-id="${escapeAttribute(item.id)}" data-remove-name="${escapeAttribute(title)}">移除檔案</button>` : "";
       return `
         <article class="material">
           ${renderPreview(item, type)}
@@ -592,7 +698,10 @@
               <span class="pill">${created}</span>
             </div>
             ${description}
-            ${fileLink}
+            <div class="actions">
+              ${fileLink}
+              ${removeButton}
+            </div>
           </div>
         </article>
       `;
