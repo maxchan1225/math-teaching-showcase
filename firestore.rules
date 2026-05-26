@@ -1,0 +1,129 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /wordcloud_sessions/{sessionId} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasOnly([
+          'topic',
+          'createdAt',
+          'answerCount',
+          'lastAnsweredAt'
+        ])
+        && request.resource.data.topic is string
+        && request.resource.data.topic.size() > 0
+        && request.resource.data.topic.size() <= 120
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.answerCount == 0
+        && request.resource.data.lastAnsweredAt == null;
+      allow update: if request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'answerCount',
+          'lastAnsweredAt'
+        ])
+        && request.resource.data.topic == resource.data.topic
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.answerCount is int
+        && request.resource.data.answerCount >= resource.data.answerCount
+        && request.resource.data.answerCount <= resource.data.answerCount + 1
+        && request.resource.data.lastAnsweredAt is timestamp;
+      allow delete: if false;
+
+      match /answers/{answerId} {
+        allow read: if true;
+        allow create: if request.resource.data.keys().hasOnly([
+            'text',
+            'normalized',
+            'createdAt',
+            'userAgent'
+          ])
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 80
+          && request.resource.data.normalized is string
+          && request.resource.data.normalized.size() > 0
+          && request.resource.data.normalized.size() <= 80
+          && request.resource.data.createdAt is timestamp
+          && request.resource.data.userAgent is string
+          && request.resource.data.userAgent.size() <= 180;
+        allow update, delete: if false;
+      }
+    }
+
+    match /wordcloud_words/{document} {
+      allow read, write: if true;
+    }
+
+    match /sanguo_quiz_submissions/{document} {
+      allow create: if request.resource.data.keys().hasOnly([
+          'groupName',
+          'answers',
+          'score',
+          'submittedAt',
+          'userAgent'
+        ])
+        && request.resource.data.groupName is string
+        && request.resource.data.groupName.size() > 0
+        && request.resource.data.groupName.size() <= 50
+        && request.resource.data.answers is map
+        && request.resource.data.answers.keys().hasAll(['q1', 'q2', 'q3', 'q4', 'q5'])
+        && request.resource.data.answers.q1 in ['A', 'B', 'C', 'D']
+        && request.resource.data.answers.q2 in ['A', 'B', 'C', 'D']
+        && request.resource.data.answers.q3 in ['A', 'B', 'C', 'D']
+        && request.resource.data.answers.q4 in ['A', 'B', 'C', 'D']
+        && request.resource.data.answers.q5 in ['A', 'B', 'C', 'D']
+        && request.resource.data.score is int
+        && request.resource.data.score >= 0
+        && request.resource.data.score <= 5
+        && request.resource.data.submittedAt is timestamp;
+      allow read, update, delete: if false;
+    }
+
+    match /math_teaching_materials/{document} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasOnly([
+          'author',
+          'title',
+          'topic',
+          'description',
+          'fileName',
+          'filePath',
+          'fileSize',
+          'contentType',
+          'downloadUrl',
+          'textPreview',
+          'createdAt'
+        ])
+        && request.resource.data.author is string
+        && request.resource.data.author.size() > 0
+        && request.resource.data.author.size() <= 36
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 80
+        && request.resource.data.topic is string
+        && request.resource.data.topic.size() > 0
+        && request.resource.data.topic.size() <= 40
+        && request.resource.data.description is string
+        && request.resource.data.description.size() <= 260
+        && request.resource.data.fileName is string
+        && request.resource.data.fileName.size() > 0
+        && request.resource.data.fileName.size() <= 180
+        && request.resource.data.filePath is string
+        && request.resource.data.filePath.matches('math-teaching-showcase/.*')
+        && request.resource.data.fileSize is int
+        && request.resource.data.fileSize > 0
+        && request.resource.data.fileSize < 25 * 1024 * 1024
+        && request.resource.data.contentType is string
+        && request.resource.data.contentType.size() > 0
+        && request.resource.data.contentType.size() <= 140
+        && request.resource.data.downloadUrl is string
+        && request.resource.data.downloadUrl.size() > 0
+        && request.resource.data.textPreview is string
+        && request.resource.data.textPreview.size() <= 900
+        && request.resource.data.createdAt is timestamp;
+      allow update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

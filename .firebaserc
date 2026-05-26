@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "teacherstudy-ac70b"
+  },
+  "targets": {
+    "teacherstudy-ac70b": {
+      "hosting": {
+        "math-teaching-showcase": [
+          "teacherstudy-ac70b-math-teaching-showcase"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}
