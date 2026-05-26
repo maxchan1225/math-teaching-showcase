@@ -85,10 +85,9 @@ service cloud.firestore {
           'topic',
           'description',
           'fileName',
-          'filePath',
           'fileSize',
           'contentType',
-          'downloadUrl',
+          'fileDataUrl',
           'textPreview',
           'createdAt'
         ])
@@ -106,16 +105,15 @@ service cloud.firestore {
         && request.resource.data.fileName is string
         && request.resource.data.fileName.size() > 0
         && request.resource.data.fileName.size() <= 180
-        && request.resource.data.filePath is string
-        && request.resource.data.filePath.matches('math-teaching-showcase/.*')
         && request.resource.data.fileSize is int
         && request.resource.data.fileSize > 0
-        && request.resource.data.fileSize < 25 * 1024 * 1024
+        && request.resource.data.fileSize < 650 * 1024
         && request.resource.data.contentType is string
         && request.resource.data.contentType.size() > 0
         && request.resource.data.contentType.size() <= 140
-        && request.resource.data.downloadUrl is string
-        && request.resource.data.downloadUrl.size() > 0
+        && request.resource.data.fileDataUrl is string
+        && request.resource.data.fileDataUrl.size() > 0
+        && request.resource.data.fileDataUrl.size() <= 900 * 1024
         && request.resource.data.textPreview is string
         && request.resource.data.textPreview.size() <= 900
         && request.resource.data.createdAt is timestamp;

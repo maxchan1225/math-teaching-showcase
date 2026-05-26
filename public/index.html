@@ -463,7 +463,7 @@
           <label for="fileInput">文檔或圖片</label>
           <div class="drop-zone">
             <input id="fileInput" name="file" type="file" accept="image/*,.pdf,.txt,.md,.doc,.docx,.ppt,.pptx" required>
-            <p class="file-hint">支援圖片、PDF、文字檔、Word、PowerPoint。單檔上限 25MB。</p>
+            <p class="file-hint">支援圖片、PDF、文字檔、Word、PowerPoint。Firestore 示例模式單檔上限 650KB。</p>
           </div>
         </div>
 
@@ -494,13 +494,6 @@
       query,
       serverTimestamp
     } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
-    import {
-      getDownloadURL,
-      getStorage,
-      ref,
-      uploadBytes
-    } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-storage.js";
-
     const firebaseConfig = {
       projectId: "teacherstudy-ac70b",
       appId: "1:1028149564309:web:25f04802c852cc9bed5c9c",
@@ -512,7 +505,6 @@
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
-    const storage = getStorage(app);
 
     const uploadForm = document.getElementById("uploadForm");
     const uploadButton = document.getElementById("uploadButton");
@@ -523,7 +515,7 @@
     const materialCounter = document.getElementById("materialCounter");
 
     const collectionName = "math_teaching_materials";
-    const maxSize = 25 * 1024 * 1024;
+    const maxSize = 650 * 1024;
 
     uploadForm.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -540,7 +532,7 @@
       }
 
       if (file.size > maxSize) {
-        setStatus("檔案超過 25MB，請換一個較小的檔案。", "error");
+        setStatus("檔案超過 650KB，Firestore 示例模式請使用較小的文檔或圖片。", "error");
         return;
       }
 
@@ -549,19 +541,9 @@
       setStatus("正在上傳教材，完成後會自動出現在展示牆。", "");
 
       try {
+        const contentType = file.type || inferContentType(file.name);
+        const fileDataUrl = await readFileAsDataUrl(file);
         const textPreview = await buildTextPreview(file);
-        const safeName = file.name.replace(/[^\w.\-\u4e00-\u9fff]/g, "_");
-        const filePath = `math-teaching-showcase/${Date.now()}-${crypto.randomUUID()}-${safeName}`;
-        const fileRef = ref(storage, filePath);
-        await uploadBytes(fileRef, file, {
-          contentType: file.type || "application/octet-stream",
-          customMetadata: {
-            author,
-            title,
-            topic
-          }
-        });
-        const downloadUrl = await getDownloadURL(fileRef);
 
         await addDoc(collection(db, collectionName), {
           author,
@@ -569,10 +551,9 @@
           topic,
           description,
           fileName: file.name,
-          filePath,
           fileSize: file.size,
-          contentType: file.type || inferContentType(file.name),
-          downloadUrl,
+          contentType,
+          fileDataUrl,
           textPreview,
           createdAt: serverTimestamp()
         });
@@ -581,7 +562,7 @@
         setStatus("已上傳，展示牆已同步更新。", "success");
       } catch (error) {
         console.error(error);
-        setStatus("上傳失敗，請確認 Firebase Storage 與 Firestore 規則已部署。", "error");
+        setStatus("上傳失敗，請確認 Firestore 規則已部署，且檔案沒有超過大小限制。", "error");
       } finally {
         uploadButton.disabled = false;
         uploadButton.textContent = "上傳並展示";
@@ -629,14 +610,14 @@
               <span class="pill">${created}</span>
             </div>
             ${description}
-            <a class="open-link" href="${escapeAttribute(item.downloadUrl)}" target="_blank" rel="noopener">開啟原始檔案</a>
+            <a class="open-link" href="${escapeAttribute(item.fileDataUrl)}" download="${escapeAttribute(item.fileName || "material")}" target="_blank" rel="noopener">下載原始檔案</a>
           </div>
         </article>
       `;
     }
 
     function renderPreview(item, type) {
-      const url = escapeAttribute(item.downloadUrl || "");
+      const url = escapeAttribute(item.fileDataUrl || "");
       if (type.startsWith("image/")) {
         return `<div class="preview"><img src="${url}" alt="${escapeAttribute(item.title || item.fileName || "教材圖片")}"></div>`;
       }
@@ -655,6 +636,15 @@
       if (!isText) return "";
       const text = await file.text();
       return text.trim().slice(0, 900);
+    }
+
+    function readFileAsDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.addEventListener("load", () => resolve(reader.result));
+        reader.addEventListener("error", () => reject(reader.error));
+        reader.readAsDataURL(file);
+      });
     }
 
     function inferContentType(name) {
